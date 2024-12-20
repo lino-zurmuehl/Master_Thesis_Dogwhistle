@@ -2,6 +2,8 @@
 
 This project enhances the detection of dog whistles—coded language with covert meanings—by cleaning mislabeled data and training a classifier using **BERT embeddings** and **Confident Learning**.
 
+**Note: The data of this project in in part not published yet by Kruk et al. For this reason the 0 instances are not accessible through this repo.***
+
 ## Overview
 
 Dog whistles are subtle and context-dependent, often evading conventional classifiers. Using the **Silent Signals** dataset (Kruk et al., 2024) and the `cleanlab` library (Northcutt et al., 2021), this project identifies mislabeled data and improves classification performance.
