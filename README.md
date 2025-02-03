@@ -1,7 +1,7 @@
-# Dog Whistle Detection with Confidence Learning
+# Dog Whistle Detection with Confidence Learning (Ongoing)
 
 This project enhances the detection of dog whistles—coded language with covert meanings—by cleaning mislabeled data and training a classifier using **BERT embeddings** and **Confident Learning**.
-
+https://github.com/lino-zurmuehl/Master_Thesis_Dogwhistle/issues
 **Note: The data of this project in in part not published yet by Kruk et al. For this reason the 0 instances are not accessible through this repo.***
 
 ## Overview
