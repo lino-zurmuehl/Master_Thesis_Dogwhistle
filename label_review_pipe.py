@@ -103,7 +103,6 @@ Remaining to review: {len(self.data) - total_reviewed}
         """
         return stats
 
-# Example usage
 if __name__ == "__main__":
     pipeline = LabelReviewPipeline()
     
