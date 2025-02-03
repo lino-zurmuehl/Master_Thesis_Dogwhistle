@@ -2,7 +2,7 @@
 
 This project enhances the detection of dog whistles—coded language with covert meanings—by cleaning mislabeled data and training a classifier using **BERT embeddings** and **Confident Learning**.
 
-**Note: The data of this project in in part not published yet by Kruk et al. For this reason the 0 instances are not accessible through this repo.***
+**Note: The data of this project is in part not published yet by Kruk et al. For this reason the 0 instances are not accessible through this repo.**
 
 ## Overview
 
