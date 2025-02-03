@@ -1,4 +1,4 @@
-# Dog Whistle Detection with Confidence Learning
+# Dog Whistle Detection with Confidence Learning (Ongoing)
 
 This project enhances the detection of dog whistles—coded language with covert meanings—by cleaning mislabeled data and training a classifier using **BERT embeddings** and **Confident Learning**.
 
@@ -18,3 +18,5 @@ Key results:
 2. **Model Training**: Train a logistic regression classifier with corrected labels.
 3. **Evaluation**: Compare performance metrics before and after label correction.
 
+## Future Plans
+Finetuning RobBERTa Model for detection or Small Language Model from HF. 
