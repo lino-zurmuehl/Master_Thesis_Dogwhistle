@@ -120,7 +120,7 @@ def run_data_loading():
     potential_wrong_label = data_with_suggested_labels.dropna(subset=["problem"]).sort_values(by="label_score", ascending=False)
 
     # Save to CSV
-    potential_wrong_label.to_csv("vetting_instances/potential_wrong_label_new.csv")
+    potential_wrong_label.to_csv("vetting_instances/potential_wrong_label.csv")
     print("Data loaded successfully. CL pipe for potential wrong labels run and saved to CSV.")
 
 if __name__ == "__main__":
