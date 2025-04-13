@@ -129,6 +129,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+dogwhistle_env
 
 # Spyder project settings
 .spyderproject
@@ -162,6 +163,7 @@ cython_debug/
 #.idea/
 
 # Custom
+/data
 /0_data
 /vetting_instances
 .DS_Store
