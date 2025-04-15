@@ -1,9 +1,7 @@
 import os
-os.environ["HUGGING_FACE_HUB_TOKEN"]="TOKEN"
 os.environ["HF_HOME"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["HF_HUB_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["TRANSFORMERS_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 import pandas as pd
 import numpy as np
@@ -24,62 +22,31 @@ import evaluate # Use the evaluate library for metrics
 
 # --- Configuration ---
 MODEL_ID = "google/gemma-2-2b-it" 
-CSV_PATH = 'informal_reviewed.csv'
 OUTPUT_DIR = "./gemma-dogwhistle-lora"
 MAX_LENGTH = 512 # Adjust based on your text length distribution
-BATCH_SIZE_PER_DEVICE = 8 # Adjust based on A100 memory
-GRAD_ACCUMULATION_STEPS = 4 # Effective batch size = BATCH_SIZE_PER_DEVICE * NUM_GPUS * GRAD_ACCUMULATION_STEPS
-LEARNING_RATE = 1e-4
+BATCH_SIZE_PER_DEVICE = 8 
+GRAD_ACCUMULATION_STEPS = 4 
+LEARNING_RATE = 0.0001
 EPOCHS = 3
-LORA_R = 16
+LORA_R = 8
 LORA_ALPHA = 32
 LORA_DROPOUT = 0.05
 WEIGHT_DECAY = 0.01
 SEED = 42
 
-# --- Data Loading and Preprocessing ---
-df = pd.read_csv(CSV_PATH)
-df = df.sample(frac=1, random_state=SEED).reset_index(drop=True)
+# --- Data Loading ---
+print("Loading preprocessed data...")
+train_df = pd.read_csv('gemma_train.csv')
+val_df = pd.read_csv('gemma_val.csv')
 
-# Ensure 'lable' column exists and is integer type
-if 'lable' not in df.columns:
-    # Assuming 'label' might be the correct column name based on user prompt context
-    if 'label' in df.columns:
-        df.rename(columns={'label': 'lable'}, inplace=True)
-    else:
-        raise ValueError("CSV must contain a 'lable' or 'label' column for the labels.")
-df['lable'] = df['lable'].astype(int)
+train_dataset = Dataset.from_pandas(train_df)
+val_dataset = Dataset.from_pandas(val_df)
 
-# Check for necessary columns
-if not all(col in df.columns for col in ['content', 'definition', 'lable']):
-    raise ValueError("CSV must contain 'content', 'definition', and 'lable' columns.")
-
-# Define the prompt formatting function
-def format_prompt(example):
-    prompt = f"""You are a helpful assistant participating in a content moderation task of dog whistle detection. A dog whistle is {example['definition']}. Does the following sentence contain a dog whistle? {example['content']}"""
-    # The model output should be 0 or 1, handled by the classification head.
-    # The prompt itself doesn't dictate the JSON structure for the *output* here,
-    # it guides the *input* interpretation for the classification task.
-    return {"text": prompt, "label": example['lable']}
-
-# Create Hugging Face Dataset
-dataset = Dataset.from_pandas(df)
-
-# Apply prompt formatting
-dataset = dataset.map(format_prompt, remove_columns=['content', 'definition', 'lable']) # Remove original columns
-
-num_classes = df['lable'].nunique()
-dataset = dataset.cast_column('label', ClassLabel(num_classes=num_classes))
-
-# Split data
-train_val_split = dataset.train_test_split(test_size=0.1, seed=SEED, stratify_by_column="label")
-train_dataset = train_val_split['train']
-val_dataset = train_val_split['test']
-
-print(f"Training on {len(train_dataset)} examples, validating on {len(val_dataset)} examples")
+num_classes = train_df['label'].nunique()
+print(f"Number of classes detected: {num_classes}")
 
 # Calculate class weights
-labels_for_weights = df['lable'].tolist() # Use original labels before splitting for accurate weights
+labels_for_weights = train_df['label'].tolist() # Use original labels before splitting for accurate weights
 class_weights = compute_class_weight(
     class_weight='balanced',
     classes=np.unique(labels_for_weights),
@@ -98,14 +65,14 @@ if tokenizer.pad_token is None:
 
 def tokenize_function(examples):
     # Tokenize the 'text' field which now contains the formatted prompt
-    return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=MAX_LENGTH)
+    return tokenizer(examples["content"], truncation=True, padding="max_length", max_length=MAX_LENGTH)
 
 tokenized_train_dataset = train_dataset.map(tokenize_function, batched=True)
 tokenized_val_dataset = val_dataset.map(tokenize_function, batched=True)
 
 # Remove the text column after tokenization
-tokenized_train_dataset = tokenized_train_dataset.remove_columns(["text"])
-tokenized_val_dataset = tokenized_val_dataset.remove_columns(["text"])
+tokenized_train_dataset = tokenized_train_dataset.remove_columns(["content"])
+tokenized_val_dataset = tokenized_val_dataset.remove_columns(["content"])
 tokenized_train_dataset.set_format("torch")
 tokenized_val_dataset.set_format("torch")
 
@@ -141,7 +108,7 @@ peft_config = LoraConfig(
         "up_proj",
         "down_proj",
     ],
-    bias="none", # Typically 'none' or 'lora_only'
+    bias="none",
 )
 
 model = get_peft_model(model, peft_config)
@@ -191,26 +158,26 @@ training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     learning_rate=LEARNING_RATE,
     per_device_train_batch_size=BATCH_SIZE_PER_DEVICE,
-    per_device_eval_batch_size=BATCH_SIZE_PER_DEVICE * 2, # Often can use larger eval batch size
+    per_device_eval_batch_size=BATCH_SIZE_PER_DEVICE * 2,
     gradient_accumulation_steps=GRAD_ACCUMULATION_STEPS,
     num_train_epochs=EPOCHS,
     weight_decay=WEIGHT_DECAY,
     evaluation_strategy="steps",
     eval_steps=100,
     save_strategy="steps",
-    save_steps=100,      # Save model checkpoint every epoch
+    save_steps=100,      
     load_best_model_at_end=True, # Load the best model based on eval metric at the end
     metric_for_best_model="f1", # Choose metric to determine the best model (e.g., f1 or accuracy)
-    push_to_hub=False,          # Set to True to push to Hugging Face Hub
-    fp16=False,                 # Disable fp16 if using bf16
-    bf16=True,                  # Enable bf16 for A100s
+    push_to_hub=False,          
+    fp16=False,                 
+    bf16=True,                  
     logging_strategy="steps",
     logging_steps=100,          # Log less frequently
     save_total_limit=2,        # Keep only the best and the latest checkpoint
     seed=SEED,
     report_to="none",  
-    ddp_find_unused_parameters=False        # Disable reporting to integrations like wandb/tensorboard unless configured
-    # optim="adamw_torch_fused", # Use fused AdamW if available (good on newer GPUs) - requires testing
+    ddp_find_unused_parameters=False,  
+    optim="adamw_torch_fused", # Use fused AdamW if available (good on newer GPUs) - requires testing
     # torch_compile=True,       # Optional: Use torch compile for potential speedup (requires PyTorch 2.0+) - requires testing
 )
 
