@@ -1,0 +1,70 @@
+============================================================
+ EVALUATION SUMMARY REPORT
+============================================================
+
+--- EVALUATION ON ORIGINAL DATASETS ---
+
+Model: RoBERTa
+Accuracy: 0.9031
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.98      0.89      0.93      3231
+           1       0.73      0.93      0.82      1002
+
+    accuracy                           0.90      4233
+   macro avg       0.85      0.91      0.88      4233
+weighted avg       0.92      0.90      0.91      4233
+
+ROC AUC Score: 0.9666
+
+--------------------------------------------------
+Model: Gemma
+Accuracy: 0.8812
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.93      0.91      0.92      3231
+           1       0.73      0.78      0.76      1002
+
+    accuracy                           0.88      4233
+   macro avg       0.83      0.85      0.84      4233
+weighted avg       0.88      0.88      0.88      4233
+
+ROC AUC Score: 0.9343
+
+--------------------------------------------------
+
+
+--- EVALUATION ON EXTERNAL DATASET ---
+
+Model: RoBERTa
+Accuracy: 0.4554
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.47      0.90      0.62        50
+           1       0.17      0.02      0.04        51
+
+    accuracy                           0.46       101
+   macro avg       0.32      0.46      0.33       101
+weighted avg       0.32      0.46      0.32       101
+
+ROC AUC Score: 0.6080
+
+--------------------------------------------------
+Model: Gemma
+Accuracy: 0.6436
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.59      0.92      0.72        50
+           1       0.83      0.37      0.51        51
+
+    accuracy                           0.64       101
+   macro avg       0.71      0.65      0.62       101
+weighted avg       0.71      0.64      0.62       101
+
+ROC AUC Score: 0.8567
+
+--------------------------------------------------

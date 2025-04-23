@@ -1,10 +1,7 @@
 import os
-# --- Environment Variables (Keep as needed) ---
-os.environ["HUGGING_FACE_HUB_TOKEN"]="TOKEN" # Replace with your token if needed
 os.environ["HF_HOME"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["HF_HUB_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["TRANSFORMERS_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3" # Let accelerate manage devices
 
 import pandas as pd
 import numpy as np
@@ -23,73 +20,30 @@ from sklearn.utils.class_weight import compute_class_weight
 import evaluate # Use the evaluate library for metrics
 
 # --- Configuration ---
-MODEL_ID = "roberta-base" # Changed to RoBERTa
-CSV_PATH = 'informal_reviewed.csv'
+MODEL_ID = "roberta-large" 
 OUTPUT_DIR = "./roberta-dogwhistle-full-finetune" # Updated output dir name
 MAX_LENGTH = 512 # Adjust based on your text length distribution and RoBERTa's limits
 BATCH_SIZE_PER_DEVICE = 8 # Adjust based on GPU memory for RoBERTa-base
 GRAD_ACCUMULATION_STEPS = 4 # Effective batch size = BATCH_SIZE_PER_DEVICE * NUM_GPUS * GRAD_ACCUMULATION_STEPS
 LEARNING_RATE = 2e-5 # Common starting LR for full fine-tuning (adjust as needed)
-EPOCHS = 3
+EPOCHS = 4
 SEED = 42
+WEIGHT_DECAY = 0.0 
 
 
+# --- Data Loading ---
+print("Loading preprocessed data...")
+train_df = pd.read_csv('roberta_train.csv')
+val_df = pd.read_csv('roberta_val.csv')
 
-# --- Data Loading and Preprocessing ---
-print(f"Loading data from: {CSV_PATH}")
-df = pd.read_csv(CSV_PATH)
-df = df.sample(frac=1, random_state=SEED).reset_index(drop=True)
+train_dataset = Dataset.from_pandas(train_df)
+val_dataset = Dataset.from_pandas(val_df)
 
-# Ensure 'label' column exists (renaming 'lable' if necessary) and is integer type
-label_column_name = 'lable'
-if label_column_name not in df.columns:
-    if 'label' in df.columns:
-        label_column_name = 'label' # Use 'label' if 'lable' doesn't exist
-    else:
-        raise ValueError("CSV must contain a 'content' column and either a 'lable' or 'label' column.")
-# Standardize to 'label' for Hugging Face datasets
-if label_column_name != 'label':
-    df.rename(columns={label_column_name: 'label'}, inplace=True)
-
-df['label'] = df['label'].astype(int)
-
-# Check for necessary 'content' column
-if 'content' not in df.columns:
-    raise ValueError("CSV must contain a 'content' column.")
-
-# Select only the necessary columns for the dataset
-df_for_dataset = df[['content', 'label']].copy()
-
-print("Creating Hugging Face Dataset...")
-# Create Hugging Face Dataset directly from the relevant columns
-dataset = Dataset.from_pandas(df_for_dataset)
-
-num_classes = df['label'].nunique()
+num_classes = train_df['label'].nunique()
 print(f"Number of classes detected: {num_classes}")
-# Cast the label column to ClassLabel
-dataset = dataset.cast_column('label', ClassLabel(num_classes=num_classes))
-
-# --- (Optional but Recommended) Calculate Class Weights ---
-# Calculate weights based on the *original* full label distribution before splitting
-print("Calculating class weights...")
-labels_for_weights = df['label'].tolist()
-class_weights = compute_class_weight(
-    class_weight='balanced',
-    classes=np.unique(labels_for_weights),
-    y=labels_for_weights
-)
-class_weights = torch.tensor(class_weights, dtype=torch.float)
-print(f"Class weights: {class_weights}")
-
-# Split data
-train_val_split = dataset.train_test_split(test_size=0.1, seed=SEED, stratify_by_column="label")
-train_dataset = train_val_split['train']
-val_dataset = train_val_split['test']
-
-print(f"Training on {len(train_dataset)} examples, validating on {len(val_dataset)} examples")
 
 # Calculate class weights
-labels_for_weights = df['label'].tolist() # Use original labels before splitting for accurate weights
+labels_for_weights = train_df['label'].tolist() # Use original labels before splitting for accurate weights
 class_weights = compute_class_weight(
     class_weight='balanced',
     classes=np.unique(labels_for_weights),
@@ -153,23 +107,23 @@ recall_metric = evaluate.load("recall")
 
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
+    # Ensure predictions are valid numbers before argmax
+    if not isinstance(predictions, np.ndarray):
+        predictions = np.array(predictions)
+    if np.isnan(predictions).any():
+         print("Warning: NaN detected in predictions, replacing with 0")
+         predictions = np.nan_to_num(predictions) # Replace NaN with zero
+
     predictions = np.argmax(predictions, axis=1)
-
-    # Determine average strategy based on number of classes
-    average_strategy = "binary" if num_classes == 2 else "macro" # or "weighted"
-
     accuracy = accuracy_metric.compute(predictions=predictions, references=labels)
-    f1 = f1_metric.compute(predictions=predictions, references=labels, average=average_strategy)
-    precision = precision_metric.compute(predictions=predictions, references=labels, average=average_strategy)
-    recall = recall_metric.compute(predictions=predictions, references=labels, average=average_strategy)
-
-    # For multi-class, F1, precision, recall are dictionaries if average='none'
-    # We use 'macro' or 'binary' here which returns a single float
+    f1 = f1_metric.compute(predictions=predictions, references=labels, average="binary") 
+    precision = precision_metric.compute(predictions=predictions, references=labels, average="binary")
+    recall = recall_metric.compute(predictions=predictions, references=labels, average="binary")
     return {
         "accuracy": accuracy["accuracy"],
-        f"f1_{average_strategy}": f1["f1"],
-        f"precision_{average_strategy}": precision["precision"],
-        f"recall_{average_strategy}": recall["recall"],
+        "f1": f1["f1"],
+        "precision": precision["precision"],
+        "recall": recall["recall"],
     }
 
 
@@ -187,7 +141,7 @@ training_args = TrainingArguments(
     save_strategy="steps",
     save_steps=100, # Save checkpoint every 100 steps (adjust as needed)
     load_best_model_at_end=True,
-    metric_for_best_model=f"f1_{'binary' if num_classes == 2 else 'macro'}", # Use appropriate metric
+    metric_for_best_model=f"f1",
     push_to_hub=False,
     fp16=True,                  # Enable mixed-precision training (common for RoBERTa)
     bf16=False,                 # Disable bf16 if using fp16
@@ -195,7 +149,9 @@ training_args = TrainingArguments(
     logging_steps=100,          # Log every 100 steps
     save_total_limit=2,         # Keep only the best and the latest checkpoint
     seed=SEED,
-    report_to="none",           # Disable external reporting unless configured
+    report_to="none", 
+    weight_decay=WEIGHT_DECAY,
+    ddp_find_unused_parameters=False,
 )
 
 # --- Trainer Initialization ---

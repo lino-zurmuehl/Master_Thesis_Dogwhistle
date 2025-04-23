@@ -167,3 +167,4 @@ cython_debug/
 /0_data
 /vetting_instances
 .DS_Store
+.csv
