@@ -1,22 +1,34 @@
-# Dog Whistle Detection with Confidence Learning (Ongoing)
-
-This project enhances the detection of dog whistles—coded language with covert meanings—by cleaning mislabeled data and training a classifier using **BERT embeddings** and **Confident Learning**.
+# Dog Whistle Detection with Fine-Tuned Language Models
 
 **Note: The data of this project is in part not published yet by Kruk et al. For this reason the 0 instances are not accessible through this repo.**
 
-## Overview
+This repository contains the code, data processing scripts, and evaluation tools used in the thesis project:
 
-Dog whistles are subtle and context-dependent, often evading conventional classifiers. Using the **Silent Signals** dataset (Kruk et al., 2024) and the `cleanlab` library (Northcutt et al., 2021), this project identifies mislabeled data and improves classification performance.
+**"Detecting Dog Whistles in Political and Online Discourse Using Fine-Tuned Language Models"**
 
-Key results:  
-- **Original Model**: Accuracy = 67%, F1-Score (class 1) = 0.51  
-- **Updated Model**: Accuracy = 83%, F1-Score (class 1) = 0.76  
+The project explores the use of RoBERTa and Gemma 2 models for identifying context-dependent coded language—commonly known as *dog whistles*—in political and online discourse.
 
-## Methodology
+---
 
-1. **Dataset Cleaning**: Identify label errors using a logistic regression model trained on BERT embeddings.
-2. **Model Training**: Train a logistic regression classifier with corrected labels.
-3. **Evaluation**: Compare performance metrics before and after label correction.
+## Project Structure
 
-## Future Plans
-Finetuning RobBERTa Model for detection or Small Language Model from HF. 
+- **`finetuning/`**  
+  Scripts and configurations for fine-tuning RoBERTa and Gemma 2 on the combined dog whistle dataset.  
+  Includes hyperparameter settings, model checkpoints, and training logs.
+
+- **`eval/`**  
+  Evaluation scripts for computing classification metrics, generating confusion matrices, and ROC curves.  
+  Also contains the external benchmark test set and evaluation pipeline used for out-of-distribution testing.
+
+- **`preprocessing/`**  
+  Scripts for cleaning, transforming, and labeling the raw data.  
+  Includes confident learning checks, GPT-4-based disambiguation logic, and train/validation split scripts.
+
+- **`plots/`**  
+  All figures used in the thesis, including performance metrics, label distributions, and interpretability visualizations.  
+  Useful for understanding dataset characteristics and model behavior.
+
+---
+
+# Acknowledgments
+Dataset and initial annotations based on the work of [Kruk et al. (2024)].

@@ -1,4 +1,5 @@
 import os
+# Set HuggingFace cache directories for model and tokenizer downloads
 os.environ["HF_HOME"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["HF_HUB_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["TRANSFORMERS_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
@@ -21,10 +22,10 @@ from sklearn.utils.class_weight import compute_class_weight
 import evaluate
 from accelerate.utils import set_seed
 
-# --- Configuration ---
+# Model and experiment configuration
 MODEL_ID = "google/gemma-2-2b-it"
 OUTPUT_DIR_BASE = "./gemma-dogwhistle-lora-hpt"
-MAX_LENGTH = 512
+MAX_LENGTH = 512  
 BATCH_SIZE_PER_DEVICE = 4
 GRAD_ACCUMULATION_STEPS = 4
 EPOCHS = 2
@@ -32,20 +33,20 @@ SEED = 42
 LORA_DROPOUT = 0.05
 LORA_ALPHA = 32
 
-# Set cache directories
+# Set cache directories again for redundancy (can be removed if not needed)
 os.environ["HF_HOME"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["HF_HUB_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
 os.environ["TRANSFORMERS_CACHE"] = "/home/234533@hertie-school.lan/workspace/cache"
 
-# --- Set Seed Early ---
+# Set random seed for reproducibility
 set_seed(SEED)
 
-# --- Data Loading ---
+# Load preprocessed training and validation data from CSV files
 print("Loading preprocessed data...")
 full_train_df = pd.read_csv('gemma_train.csv')
 full_val_df = pd.read_csv('gemma_val.csv')
 
-# --- Subset Data for HPT ---
+# Subset a fraction of the data for hyperparameter tuning (HPT)
 HPT_TRAIN_SUBSET_FRACTION = 0.3
 HPT_VAL_SUBSET_FRACTION = 0.5
 
@@ -65,13 +66,15 @@ _, val_df_hpt = train_test_split(
 print(f"Using {len(train_df_hpt)} samples for HPT training subset.")
 print(f"Using {len(val_df_hpt)} samples for HPT validation subset.")
 
+# Convert pandas DataFrames to HuggingFace Datasets
 train_dataset_hpt = Dataset.from_pandas(train_df_hpt)
 val_dataset_hpt = Dataset.from_pandas(val_df_hpt)
 
+# Determine the number of unique classes in the dataset
 num_classes = full_train_df['label'].nunique()
 print(f"Number of classes detected: {num_classes}")
 
-# Calculate class weights
+# Compute class weights for imbalanced classification
 labels_for_weights = full_train_df['label'].tolist()
 class_weights_np = compute_class_weight(
     class_weight='balanced',
@@ -81,7 +84,7 @@ class_weights_np = compute_class_weight(
 class_weights = torch.tensor(class_weights_np, dtype=torch.float)
 print(f"Class weights: {class_weights}")
 
-# --- Tokenization ---
+# Load tokenizer and set pad token if not already set
 tokenizer = AutoTokenizer.from_pretrained(
     MODEL_ID,
     cache_dir="/home/234533@hertie-school.lan/workspace/cache"
@@ -90,11 +93,12 @@ if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
     print("Set pad_token to eos_token")
 
+# Tokenization function for the 'content' column, handling missing values
 def tokenize_function(examples):
     texts = [str(text) if text is not None else "" for text in examples["content"]]
     return tokenizer(texts, truncation=True, padding="max_length", max_length=MAX_LENGTH)
 
-# Tokenize the HPT subsets
+# Tokenize the HPT subsets and remove all columns except 'label'
 tokenized_train_dataset_hpt = train_dataset_hpt.map(
     tokenize_function, batched=True, 
     remove_columns=[col for col in train_df_hpt.columns if col != 'label']
@@ -106,14 +110,16 @@ tokenized_val_dataset_hpt = val_dataset_hpt.map(
 tokenized_train_dataset_hpt.set_format("torch")
 tokenized_val_dataset_hpt.set_format("torch")
 
+# Data collator for dynamic padding during batching
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-# --- Metrics ---
+# Load evaluation metrics from the evaluate library
 accuracy_metric = evaluate.load("accuracy")
 f1_metric = evaluate.load("f1")
 precision_metric = evaluate.load("precision")
 recall_metric = evaluate.load("recall")
 
+# Compute metrics for evaluation and model selection
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     if not isinstance(predictions, np.ndarray):
@@ -133,7 +139,7 @@ def compute_metrics(eval_pred):
         "recall": recall["recall"],
     }
 
-# --- Custom Trainer for Class Weights ---
+# Custom Trainer class to incorporate class weights into the loss calculation
 class WeightedLossTrainer(Trainer):
     def __init__(self, class_weights_tensor, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -154,14 +160,14 @@ class WeightedLossTrainer(Trainer):
         loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
         return (loss, outputs) if return_outputs else loss
 
-# --- Define hyperparameter grid ---
+# Define the hyperparameter grid for grid search
 param_grid = {
     "learning_rate": [1e-5, 3e-5, 1e-4],
     "lora_r": [8, 16, 32],
     "weight_decay": [0.01, 0.1]
 }
 
-# --- Generate parameter combinations ---
+# Generate all combinations of hyperparameters from the grid
 def get_param_combinations(param_grid):
     """Generate all combinations of parameters from the grid"""
     from itertools import product
@@ -173,20 +179,20 @@ def get_param_combinations(param_grid):
 param_combinations = get_param_combinations(param_grid)
 print(f"Total parameter combinations to try: {len(param_combinations)}")
 
-# --- Grid Search ---
+# Run grid search over all parameter combinations and collect results
 results = []
 
 for idx, params in enumerate(param_combinations):
     print(f"\n--- Starting Trial {idx+1}/{len(param_combinations)} ---")
     print(params)
     
-    # Set seed for reproducibility
+    # Set seed for reproducibility for each trial
     set_seed(SEED + idx)
     
     # Output directory for this trial
     trial_output_dir = os.path.join(OUTPUT_DIR_BASE, f"grid_trial_{idx+1}")
     
-    # Model setup with current parameters
+    # Load the base model for sequence classification
     model = AutoModelForSequenceClassification.from_pretrained(
         MODEL_ID,
         num_labels=num_classes,
@@ -197,7 +203,7 @@ for idx, params in enumerate(param_combinations):
     if model.config.pad_token_id is None:
         model.config.pad_token_id = tokenizer.pad_token_id
     
-    # LoRA configuration
+    # Configure LoRA (Low-Rank Adaptation) for parameter-efficient fine-tuning
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         inference_mode=False,
@@ -209,7 +215,7 @@ for idx, params in enumerate(param_combinations):
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
     
-    # Training arguments
+    # Define training arguments for HuggingFace Trainer
     training_args = TrainingArguments(
         output_dir=trial_output_dir,
         learning_rate=params["learning_rate"],
@@ -236,7 +242,7 @@ for idx, params in enumerate(param_combinations):
         warmup_steps=50,
     )
     
-    # Initialize trainer
+    # Initialize the Trainer with the custom weighted loss and metrics
     trainer = WeightedLossTrainer(
         class_weights_tensor=class_weights,
         model=model,
@@ -248,19 +254,19 @@ for idx, params in enumerate(param_combinations):
         compute_metrics=compute_metrics,
     )
     
-    # Train and evaluate
+    # Train and evaluate the model for this hyperparameter combination
     try:
         trainer.train()
         eval_results = trainer.evaluate()
         
-        # Store results
+        # Store results for this trial
         trial_results = {
             "trial_id": idx + 1,
             "f1": eval_results["eval_f1"],
             "accuracy": eval_results["eval_accuracy"],
             "precision": eval_results["eval_precision"],
             "recall": eval_results["eval_recall"],
-            **params  # include all hyperparameters
+            **params
         }
         results.append(trial_results)
         print(f"Trial {idx+1} results: {eval_results}")
@@ -270,7 +276,7 @@ for idx, params in enumerate(param_combinations):
 
     except Exception as e:
         print(f"Error in trial {idx+1}: {e}")
-        # Add failed trial with NaN metrics
+        # Add failed trial with NaN metrics and error message
         results.append({
             "trial_id": idx + 1,
             "f1": float('nan'),
@@ -281,14 +287,12 @@ for idx, params in enumerate(param_combinations):
             "error": str(e)
         })
 
-
-
-# --- Save all results to CSV ---
+# Save all grid search results to a CSV file for later analysis
 results_df = pd.DataFrame(results)
 results_df.to_csv(os.path.join(OUTPUT_DIR_BASE, "grid_search_results.csv"), index=False)
 print(f"Grid search results saved to {os.path.join(OUTPUT_DIR_BASE, 'grid_search_results.csv')}")
 
-# --- Find and display best parameters ---
+# Find and display the best hyperparameter combination based on F1 score
 if not results_df.empty and not results_df["f1"].isna().all():
     best_idx = results_df["f1"].idxmax()
     best_params = results_df.iloc[best_idx].to_dict()
