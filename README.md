@@ -12,7 +12,7 @@ The project explores the use of RoBERTa and Gemma 2 models for identifying conte
 
 ## Project Structure
 
-- **`finetuning/`**  
+- **`finetuning_scripts/`**  
   Scripts and configurations for fine-tuning RoBERTa and Gemma 2 on the combined dog whistle dataset.  
   Includes hyperparameter settings, model checkpoints, and training logs.
 
