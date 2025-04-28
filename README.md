@@ -4,7 +4,7 @@
 
 This repository contains the code, data processing scripts, and evaluation tools used in the thesis project:
 
-**"Detecting Dog Whistles in Political and Online Discourse Using Fine-Tuned Language Models"**
+**"Reading Between the Lines: Fine-Tuning Language Models for Context-Aware Dog Whistle Detection"**
 
 The project explores the use of RoBERTa and Gemma 2 models for identifying context-dependent coded language—commonly known as *dog whistles*—in political and online discourse.
 
